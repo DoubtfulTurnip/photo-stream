@@ -36,6 +36,7 @@ services:
       - ALLOW_IMAGE_SHARING=${ALLOW_IMAGE_SHARING}
       - PHOTO_STREAM_BUILD_ON_START=${PHOTO_STREAM_BUILD_ON_START:-1}
       - PHOTO_STREAM_SERVE_MODE=${PHOTO_STREAM_SERVE_MODE:-jekyll}
+      - PHOTO_STREAM_INCREMENTAL=${PHOTO_STREAM_INCREMENTAL:-0}
     volumes:
       - ${PHOTO_PATH}:/photo-stream/photos
     env_file: .env

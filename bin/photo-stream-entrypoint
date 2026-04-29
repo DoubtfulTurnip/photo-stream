@@ -5,16 +5,55 @@ HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-4000}"
 BUILD_ON_START="${PHOTO_STREAM_BUILD_ON_START:-1}"
 SERVE_MODE="${PHOTO_STREAM_SERVE_MODE:-jekyll}"
+INCREMENTAL="${PHOTO_STREAM_INCREMENTAL:-0}"
 SITE_DIR="/photo-stream/_site"
+
+build_args() {
+  if [ "$INCREMENTAL" = "1" ]; then
+    printf '%s\n' "--trace --incremental"
+  else
+    printf '%s\n' "--trace"
+  fi
+}
+
+run_build() {
+  # shellcheck disable=SC2046
+  bundle exec jekyll build $(build_args)
+}
+
+run_jekyll_serve() {
+  # shellcheck disable=SC2046
+  exec bundle exec jekyll serve --host "$HOST" --port "$PORT" $(build_args)
+}
+
+serve_static() {
+  echo "Serving existing static site from $SITE_DIR on $HOST:$PORT"
+  exec ruby -run -e httpd "$SITE_DIR" -b "$HOST" -p "$PORT"
+}
+
+if [ "$SERVE_MODE" = "background" ]; then
+  if [ ! -f "$SITE_DIR/index.html" ]; then
+    echo "No existing _site/index.html found; running one build before background serve."
+    run_build
+  else
+    echo "Starting background Jekyll build while serving existing _site."
+    (
+      run_build &&
+        echo "Background Jekyll build completed." ||
+        echo "Background Jekyll build failed; continuing to serve existing _site."
+    ) &
+  fi
+
+  serve_static
+fi
 
 if [ "$SERVE_MODE" = "static" ] || [ "$BUILD_ON_START" = "0" ]; then
   if [ ! -f "$SITE_DIR/index.html" ]; then
     echo "No existing _site/index.html found; running one build before static serve."
-    bundle exec jekyll build --trace
+    run_build
   fi
 
-  echo "Serving existing static site from $SITE_DIR on $HOST:$PORT"
-  exec ruby -run -e httpd "$SITE_DIR" -b "$HOST" -p "$PORT"
+  serve_static
 fi
 
-exec bundle exec jekyll serve --host "$HOST" --port "$PORT" --trace
+run_jekyll_serve

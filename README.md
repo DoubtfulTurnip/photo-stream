@@ -96,6 +96,7 @@ Configuration is handled through `.env`. The most commonly used settings are:
 - `ALLOW_IMAGE_SHARING`
 - `PHOTO_STREAM_BUILD_ON_START`
 - `PHOTO_STREAM_SERVE_MODE`
+- `PHOTO_STREAM_INCREMENTAL`
 - `TWITTER_USERNAME`
 - `GITHUB_USERNAME`
 - `INSTAGRAM_USERNAME`
@@ -113,6 +114,8 @@ During a build, images from `photos/original` are processed into:
 Generated static output is written to `_site`.
 
 Set `PHOTO_STREAM_SERVE_MODE=static` or `PHOTO_STREAM_BUILD_ON_START=0` to skip Jekyll generation on container restart when `_site/index.html` already exists. Use the default `jekyll` mode again after adding photos so the site and image variants are regenerated.
+
+Set `PHOTO_STREAM_SERVE_MODE=background` to serve the existing `_site` immediately and run Jekyll generation in the background. This is useful when photos change occasionally and fast container startup matters more than the newest photo appearing instantly. Set `PHOTO_STREAM_INCREMENTAL=1` to pass `--incremental` to Jekyll builds.
 
 ## Security Notes
 

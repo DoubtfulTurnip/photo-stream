@@ -113,7 +113,7 @@ During a build, images from `photos/original` are processed into:
 
 Generated static output is written to `_site`.
 
-By default, the container serves the existing `_site` immediately and runs Jekyll generation in the background when `_site/index.html` already exists. If `_site/index.html` is missing, it runs one foreground build first.
+By default, the container serves `_site` immediately and runs Jekyll generation in the background. If `_site/index.html` is missing on first startup, the container creates a temporary auto-refreshing page first so the web server is reachable while the initial site build completes.
 
 Set `PHOTO_STREAM_SERVE_MODE=static` or `PHOTO_STREAM_BUILD_ON_START=0` to skip Jekyll generation on container restart when `_site/index.html` already exists. Set `PHOTO_STREAM_SERVE_MODE=jekyll` to block startup until generation finishes. Set `PHOTO_STREAM_INCREMENTAL=1` to pass `--incremental` to Jekyll builds.
 

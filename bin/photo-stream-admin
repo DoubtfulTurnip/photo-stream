@@ -18,6 +18,8 @@ PHOTO_DIR = File.join(APP_ROOT, "photos", "original")
 DATA_DIR = File.join(APP_ROOT, "_data")
 METADATA_FILE = File.join(DATA_DIR, "photos.yml")
 STATUS_FILE = ENV.fetch("PHOTO_STREAM_STATUS_FILE", File.join(APP_ROOT, ".photo-stream", "status.json"))
+HISTORY_FILE = ENV.fetch("PHOTO_STREAM_HISTORY_FILE", File.join(APP_ROOT, ".photo-stream", "builds.json"))
+LOG_DIR = ENV.fetch("PHOTO_STREAM_LOG_DIR", File.join(APP_ROOT, ".photo-stream", "logs"))
 BUILD_COMMAND = ENV.fetch("PHOTO_STREAM_BUILD_COMMAND", File.join(APP_ROOT, "bin", "photo-stream-build"))
 BUILD_LOG = ENV.fetch("PHOTO_STREAM_BUILD_LOG", File.join(APP_ROOT, ".photo-stream", "build.log"))
 ADMIN_USERNAME = ENV.fetch("PHOTO_STREAM_ADMIN_USERNAME", "admin")
@@ -45,6 +47,7 @@ class AdminApp
     when ["POST", "/photos/update"] then require_auth { update_photo }
     when ["POST", "/rebuild"] then require_auth { rebuild }
     when ["GET", "/status"] then require_auth { json(status) }
+    when ["GET", "/builds/log"] then require_auth { build_log }
     else not_found
     end
   rescue StandardError => e
@@ -106,6 +109,10 @@ class AdminApp
           #{csrf_input}
           <button type="submit">Rebuild Site</button>
         </form>
+      </section>
+      <section>
+        <h2>Build History</h2>
+        #{build_history_table}
       </section>
       <section>
         <h2>Manage</h2>
@@ -196,6 +203,18 @@ class AdminApp
     Process.spawn({ "PHOTO_STREAM_BUILD_REASON" => "admin" }, BUILD_COMMAND, out: [BUILD_LOG, "a"], err: [:child, :out])
   end
 
+  def build_log
+    entry = build_history.find { |item| item["id"].to_s == @req.query["id"].to_s }
+    return not_found unless entry
+
+    log_file = entry["log_file"].to_s
+    return not_found unless log_file.start_with?(LOG_DIR + File::SEPARATOR)
+    return not_found unless File.file?(log_file)
+
+    @res["Content-Type"] = "text/plain; charset=utf-8"
+    @res.body = File.read(log_file).lines.last(500).join
+  end
+
   def photos
     data = load_metadata
     Dir.glob(File.join(PHOTO_DIR, "*"))
@@ -239,6 +258,48 @@ class AdminApp
     {}
   end
 
+  def build_history
+    return [] unless File.exist?(HISTORY_FILE)
+
+    JSON.parse(File.read(HISTORY_FILE))
+  rescue JSON::ParserError
+    []
+  end
+
+  def build_history_table
+    return "<p class=\"muted\">No builds have been recorded yet.</p>" if build_history.empty?
+
+    rows = build_history.map do |entry|
+      state = entry["state"].to_s
+      log_button = if entry["log_file"].to_s.empty?
+        ""
+      else
+        %(<button type="button" class="link-button" data-log-id="#{h(entry["id"])}">View log</button>)
+      end
+      <<~HTML
+        <tr>
+          <td><span class="status #{h(state)}">#{h(state)}</span></td>
+          <td>#{h(entry["reason"].to_s)}</td>
+          <td>#{h(entry["message"].to_s)}</td>
+          <td>#{h(entry["updated_at"].to_s)}</td>
+          <td>#{log_button}</td>
+        </tr>
+      HTML
+    end.join
+
+    <<~HTML
+      <table>
+        <thead><tr><th>Status</th><th>Reason</th><th>Message</th><th>Updated</th><th>Log</th></tr></thead>
+        <tbody>#{rows}</tbody>
+      </table>
+      <dialog id="build-log-modal">
+        <form method="dialog"><button class="secondary">Close</button></form>
+        <h2>Build Log</h2>
+        <pre id="build-log-output">Loading...</pre>
+      </dialog>
+    HTML
+  end
+
   def render_login_form
     <<~HTML
       <form method="post" action="/login" class="login">
@@ -279,19 +340,48 @@ class AdminApp
           label.check { align-items: center; display: flex; gap: 8px; }
           label.check input { margin: 0; width: auto; }
           button, .button { background: #1f2933; border: 0; border-radius: 6px; color: white; cursor: pointer; display: inline-block; font: inherit; padding: 10px 14px; text-decoration: none; }
+          .link-button { background: transparent; color: #1f2933; padding: 0; text-decoration: underline; }
           .secondary { background: #667085; }
           .actions { display: flex; gap: 10px; }
           .error { color: #b42318; }
+          .status { border-radius: 999px; color: white; display: inline-block; font-size: .85rem; padding: 4px 8px; text-transform: capitalize; }
+          .status.success { background: #027a48; }
+          .status.failed { background: #b42318; }
+          .status.running { background: #175cd3; }
+          dialog { border: 0; border-radius: 8px; max-width: min(900px, 92vw); width: 900px; }
+          dialog::backdrop { background: rgba(0, 0, 0, .6); }
+          pre { background: #111827; border-radius: 6px; color: #f9fafb; max-height: 65vh; overflow: auto; padding: 14px; white-space: pre-wrap; }
           @media (prefers-color-scheme: dark) {
             body { background: #111827; color: #f9fafb; }
             section, table, form.login, form.editor { background: #1f2933; border-color: #344054; }
             th, td { border-color: #344054; }
+            .link-button { color: #f9fafb; }
           }
         </style>
       </head>
       <body>
         #{nav}
         <main>#{body}</main>
+        <script>
+          document.addEventListener('click', async (event) => {
+            const button = event.target.closest('[data-log-id]');
+            if (!button) return;
+
+            const modal = document.getElementById('build-log-modal');
+            const output = document.getElementById('build-log-output');
+            if (!modal || !output) return;
+
+            output.textContent = 'Loading...';
+            modal.showModal();
+
+            try {
+              const response = await fetch(`/builds/log?id=${encodeURIComponent(button.dataset.logId)}`);
+              output.textContent = response.ok ? await response.text() : `Unable to load log: ${response.status}`;
+            } catch (error) {
+              output.textContent = `Unable to load log: ${error}`;
+            }
+          });
+        </script>
       </body>
       </html>
     HTML

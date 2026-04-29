@@ -5,26 +5,43 @@ APP_ROOT="${PHOTO_STREAM_ROOT:-/photo-stream}"
 SITE_DIR="${PHOTO_STREAM_SITE_DIR:-$APP_ROOT/_site}"
 STATUS_DIR="${PHOTO_STREAM_STATUS_DIR:-$APP_ROOT/.photo-stream}"
 STATUS_FILE="${PHOTO_STREAM_STATUS_FILE:-$STATUS_DIR/status.json}"
+HISTORY_FILE="${PHOTO_STREAM_HISTORY_FILE:-$STATUS_DIR/builds.json}"
+LOG_DIR="${PHOTO_STREAM_LOG_DIR:-$STATUS_DIR/logs}"
 LOCK_DIR="${PHOTO_STREAM_BUILD_LOCK_DIR:-/tmp/photo-stream-build.lock}"
 REASON="${PHOTO_STREAM_BUILD_REASON:-startup}"
 INCREMENTAL="${PHOTO_STREAM_INCREMENTAL:-0}"
+RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+LOG_FILE="$LOG_DIR/$RUN_ID.log"
 
 write_status() {
   state="$1"
   message="$2"
   exit_code="${3:-}"
   ruby -rjson -rfileutils -rtime -e '
-    path, state, message, reason, exit_code = ARGV
+    path, history_path, state, message, reason, exit_code, run_id, log_file = ARGV
     FileUtils.mkdir_p(File.dirname(path))
+    FileUtils.mkdir_p(File.dirname(history_path))
+    now = Time.now.utc.iso8601
     status = {
+      id: run_id,
       state: state,
       message: message,
       reason: reason,
-      updated_at: Time.now.utc.iso8601
+      updated_at: now,
+      log_file: log_file
     }
     status[:exit_code] = exit_code.to_i unless exit_code.nil? || exit_code.empty?
     File.write(path, JSON.pretty_generate(status))
-  ' "$STATUS_FILE" "$state" "$message" "$REASON" "$exit_code"
+
+    history = if File.exist?(history_path)
+      JSON.parse(File.read(history_path))
+    else
+      []
+    end
+    history.reject! { |entry| entry["id"] == run_id }
+    history.unshift(status)
+    File.write(history_path, JSON.pretty_generate(history.first(25)))
+  ' "$STATUS_FILE" "$HISTORY_FILE" "$state" "$message" "$REASON" "$exit_code" "$RUN_ID" "$LOG_FILE"
 }
 
 if ! mkdir "$LOCK_DIR" 2>/dev/null; then
@@ -38,7 +55,14 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 cd "$APP_ROOT"
+mkdir -p "$LOG_DIR"
 write_status "running" "Jekyll build started." ""
+{
+  echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Jekyll build started."
+  echo "Reason: $REASON"
+  echo "Incremental: $INCREMENTAL"
+  echo
+} > "$LOG_FILE"
 
 if [ "$INCREMENTAL" = "1" ]; then
   set -- --trace --incremental
@@ -46,10 +70,16 @@ else
   set -- --trace
 fi
 
-if bundle exec jekyll build "$@"; then
+if bundle exec jekyll build "$@" >> "$LOG_FILE" 2>&1; then
+  echo >> "$LOG_FILE"
+  echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Jekyll build completed." >> "$LOG_FILE"
+  cat "$LOG_FILE"
   write_status "success" "Jekyll build completed." "0"
 else
   code="$?"
+  echo >> "$LOG_FILE"
+  echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Jekyll build failed with exit code $code." >> "$LOG_FILE"
+  cat "$LOG_FILE"
   write_status "failed" "Jekyll build failed." "$code"
   exit "$code"
 fi

@@ -146,7 +146,7 @@ Then open:
 http://localhost:4001
 ```
 
-The dashboard can edit per-photo title, caption, location, tags, featured state, and hidden state. Metadata is stored in `_data/photos.yml`, so mount `PHOTO_DATA_PATH` to preserve edits across container updates. The rebuild button starts a background Jekyll build and writes internal status under `.photo-stream/status.json`.
+The dashboard can edit per-photo title, caption, location, tags, featured state, and hidden state. Metadata is stored in `_data/photos.yml`, so mount `PHOTO_DATA_PATH` to preserve edits across container updates. The rebuild button starts a background Jekyll build, records recent build history, and keeps per-build logs under `.photo-stream/logs`. Failed builds can be opened from the dashboard to inspect the captured Jekyll/container output.
 
 ## Security Notes
 

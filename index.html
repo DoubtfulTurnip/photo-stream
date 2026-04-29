@@ -13,9 +13,9 @@
 	<main>
 		<ul class="grid" id="{{ target }}">
 		{% if site.env.DEFAULT_REVERSE_SORT == "1" %}
-			{% assign images = page.images | default: site.static_files | photo_filter | reverse %}
+			{% assign images = site.static_files | photo_filter | reverse %}
 		{% else %}
-			{% assign images = page.images | default: site.static_files | photo_filter %}
+			{% assign images = site.static_files | photo_filter %}
 		{% endif %}
 		{% include photos.html %}
 		</ul>

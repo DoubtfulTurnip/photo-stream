@@ -1,6 +1,10 @@
 ---
 ---
-{% assign images = site.static_files | photo_filter %}
+{% if site.env.DEFAULT_REVERSE_SORT == "1" %}
+  {% assign images = site.static_files | photo_filter | reverse %}
+{% else %}
+  {% assign images = site.static_files | photo_filter %}
+{% endif %}
 (function(html) {
   const id = document.currentScript.getAttribute('data-photo-id');
   const url = document.currentScript.getAttribute('data-photo-url');

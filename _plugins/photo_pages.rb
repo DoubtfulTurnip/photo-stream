@@ -6,7 +6,7 @@ module Jekyll
 
     def generate(site)
       site.static_files.each do |file|
-        if photo_file?(file)
+        if photo_file?(file) && !PhotoMetadata::Lookup.hidden?(site, file)
           site.pages << PhotoPage.new(site, site.source, file)
         end
       end

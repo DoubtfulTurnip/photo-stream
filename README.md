@@ -27,6 +27,8 @@ Demo photos included with the original project are credited to [Carrie Cronan](h
 - Optional original-image download controls
 - Optional footer links for GitHub, Instagram, Twitter, and a custom URL
 - Optional header bar and configurable photo sort order
+- Optional metadata for photo titles, captions, locations, tags, featured state, and hidden state
+- Internal admin dashboard for editing metadata and triggering rebuilds
 
 ## Updates In This Fork
 
@@ -40,6 +42,8 @@ Demo photos included with the original project are credited to [Carrie Cronan](h
 - `rexml` was updated to address a known malformed XML denial-of-service advisory
 - A GitHub Actions workflow builds and publishes the container image to GHCR
 - Small JavaScript and EXIF-processing fixes were applied
+- The container can serve the public static site immediately while Jekyll rebuilds in the background
+- A lightweight admin dashboard was added on a separate port for LAN-only management
 
 ## Container Image
 
@@ -97,6 +101,11 @@ Configuration is handled through `.env`. The most commonly used settings are:
 - `PHOTO_STREAM_BUILD_ON_START`
 - `PHOTO_STREAM_SERVE_MODE`
 - `PHOTO_STREAM_INCREMENTAL`
+- `PHOTO_STREAM_ADMIN_ENABLED`
+- `PHOTO_STREAM_ADMIN_USERNAME`
+- `PHOTO_STREAM_ADMIN_PASSWORD`
+- `PHOTO_STREAM_ADMIN_PORT`
+- `PHOTO_DATA_PATH`
 - `TWITTER_USERNAME`
 - `GITHUB_USERNAME`
 - `INSTAGRAM_USERNAME`
@@ -117,11 +126,33 @@ By default, the container serves `_site` immediately and runs Jekyll generation 
 
 Set `PHOTO_STREAM_SERVE_MODE=static` or `PHOTO_STREAM_BUILD_ON_START=0` to skip Jekyll generation on container restart when `_site/index.html` already exists. Set `PHOTO_STREAM_SERVE_MODE=jekyll` to block startup until generation finishes. Set `PHOTO_STREAM_INCREMENTAL=1` to pass `--incremental` to Jekyll builds.
 
+## Admin Dashboard
+
+The optional admin dashboard runs on a separate port from the public photo site. It is intended for trusted LAN or VPN access, while the public site can continue to be exposed through a reverse proxy.
+
+Set these values in `.env`:
+
+```env
+PHOTO_STREAM_ADMIN_ENABLED=1
+PHOTO_STREAM_ADMIN_USERNAME=admin
+PHOTO_STREAM_ADMIN_PASSWORD=change-this-password
+PHOTO_STREAM_ADMIN_PORT=4001
+PHOTO_DATA_PATH=./_data
+```
+
+Then open:
+
+```text
+http://localhost:4001
+```
+
+The dashboard can edit per-photo title, caption, location, tags, featured state, and hidden state. Metadata is stored in `_data/photos.yml`, so mount `PHOTO_DATA_PATH` to preserve edits across container updates. The rebuild button starts a background Jekyll build and writes internal status under `.photo-stream/status.json`.
+
 ## Security Notes
 
 This project processes image files through EXIF and image-processing libraries. Only trusted users should be able to add files to `photos/original`.
 
-For public hosting, the safest deployment pattern is to serve the generated `_site` directory from a normal static web server or CDN.
+For public hosting, expose only the public site port unless you intentionally make the admin dashboard reachable. The admin dashboard uses basic form authentication, but it is designed for trusted internal access rather than direct internet exposure.
 
 ## Upstream
 

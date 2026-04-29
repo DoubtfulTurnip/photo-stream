@@ -1,5 +1,9 @@
 {% assign slug = image.name | strip_extension | slugify %}
 {% assign safe_name = image.name | uri_escape %}
+{% assign title = image | photo_title %}
+{% assign caption = image | photo_caption %}
+{% assign location = image | photo_location %}
+{% assign tags = image | photo_tags %}
 {% assign next_index = forloop.index0 | plus: 1 %}
 {% assign previous_index = forloop.index0 | minus: 1 %}
 
@@ -11,7 +15,7 @@
     {% assign target = "" %}
 {% endif %}
 
-<li class="item {{ target }}" id="id-{{ slug }}" style="background-image: url('{{ safe_name | processed_path: 'tint' }}')" title="{{ image.name | strip_extension }}">
+<li class="item {{ target }}" id="id-{{ slug }}" style="background-image: url('{{ safe_name | processed_path: 'tint' }}')" title="{{ title | escape }}">
 
     <img class="lazyload" data-src="{{ safe_name | processed_path: 'thumbnail' }}" src="{{ safe_name | processed_path: 'tint' }}" height="{{ image_path | exif: 'height'}}" width="{{ image_path | exif: 'width'}}" />
     <span class="full">
@@ -34,21 +38,37 @@
     {% endunless %}
     <ul class="links top photodetail-links">
         {% if site.env.ALLOW_IMAGE_SHARING == "1" %}
-            <li class="share"><a href="{{ slug | relative_url }}" data-share-title="{{ image.basename | escape }}" data-share-url="{{ slug | relative_url }}" title="Share this photo">Share</a></li>
+            <li class="share"><a href="{{ slug | relative_url }}" data-share-title="{{ title | escape }}" data-share-url="{{ slug | relative_url }}" title="Share this photo">Share</a></li>
         {% endif %}
         {% if site.env.ALLOW_ORIGINAL_DOWNLOAD == "1" %}
             <li class="download"><a href="{{ image.path }}" download="{{ safe_name }}" class="" title="Download this image">Download</a></li>
         {% endif %}
     </ul>
+    <span class="photo-info">
+        <strong>{{ title }}</strong>
+        {% if caption != "" %}<span>{{ caption }}</span>{% endif %}
+        {% if location != "" %}<span>{{ location }}</span>{% endif %}
+        {% if tags.size > 0 %}<span>{{ tags | join: ", " }}</span>{% endif %}
+    </span>
 
     <ul class="meta">
+        <li class="photo-title">{{ title }}</li>
+        {% if caption != "" %}
+            <li class="photo-caption">{{ caption }}</li>
+        {% endif %}
+        {% if location != "" %}
+            <li class="photo-location">{{ location }}</li>
+        {% endif %}
+        {% if tags.size > 0 %}
+            <li class="photo-tags">{{ tags | join: ", " }}</li>
+        {% endif %}
         <!--
         <li>{{ image_path | exif: 'model'}}</li>
         <li>{{ image_path | exif: 'exposure_time'}}</li>
         <li><span class="aperture"><em>f</em>/</span>{{ image_path | exif: 'aperture_value'}}</li>
         -->
         {% if site.env.ALLOW_IMAGE_SHARING == "1" %}
-            <li><a href="{{ slug | relative_url }}" data-share-title="{{ image.basename | escape }}" data-share-url="{{ slug | relative_url }}" class="gridview-button share" title="Share this image">Share</a></li>
+            <li><a href="{{ slug | relative_url }}" data-share-title="{{ title | escape }}" data-share-url="{{ slug | relative_url }}" class="gridview-button share" title="Share this image">Share</a></li>
         {% endif %}
         {% if site.env.ALLOW_ORIGINAL_DOWNLOAD == "1" %}
             <li><a href="{{ image.path }}" download="{{ safe_name }}" class="gridview-button download" title="Download this image">Download</a></li>

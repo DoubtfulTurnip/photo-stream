@@ -37,9 +37,15 @@ services:
       - PHOTO_STREAM_BUILD_ON_START=${PHOTO_STREAM_BUILD_ON_START:-1}
       - PHOTO_STREAM_SERVE_MODE=${PHOTO_STREAM_SERVE_MODE:-background}
       - PHOTO_STREAM_INCREMENTAL=${PHOTO_STREAM_INCREMENTAL:-0}
+      - PHOTO_STREAM_ADMIN_ENABLED=${PHOTO_STREAM_ADMIN_ENABLED:-1}
+      - PHOTO_STREAM_ADMIN_USERNAME=${PHOTO_STREAM_ADMIN_USERNAME:-admin}
+      - PHOTO_STREAM_ADMIN_PASSWORD=${PHOTO_STREAM_ADMIN_PASSWORD:-}
+      - PHOTO_STREAM_ADMIN_PORT=${PHOTO_STREAM_ADMIN_PORT:-4001}
     volumes:
-      - ${PHOTO_PATH}:/photo-stream/photos
+      - ${PHOTO_PATH:-./photos}:/photo-stream/photos
+      - ${PHOTO_DATA_PATH:-./_data}:/photo-stream/_data
     env_file: .env
     ports:
       - "4000:4000"
+      - "4001:4001"
     restart: unless-stopped

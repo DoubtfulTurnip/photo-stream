@@ -1,0 +1,13 @@
+---
+# Optional photo metadata managed by the admin dashboard.
+# Keys are original filenames under photos/original.
+#
+# example.jpg:
+#   title: Example title
+#   caption: A short caption for the public photo page.
+#   location: Wellington, New Zealand
+#   tags:
+#     - landscape
+#     - new-zealand
+#   hidden: false
+#   featured: false

@@ -1,0 +1,399 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "base64"
+require "cgi"
+require "date"
+require "erb"
+require "fileutils"
+require "json"
+require "openssl"
+require "securerandom"
+require "time"
+require "webrick"
+require "yaml"
+
+APP_ROOT = ENV.fetch("PHOTO_STREAM_ROOT", File.expand_path("..", __dir__))
+PHOTO_DIR = File.join(APP_ROOT, "photos", "original")
+DATA_DIR = File.join(APP_ROOT, "_data")
+METADATA_FILE = File.join(DATA_DIR, "photos.yml")
+STATUS_FILE = ENV.fetch("PHOTO_STREAM_STATUS_FILE", File.join(APP_ROOT, ".photo-stream", "status.json"))
+BUILD_COMMAND = ENV.fetch("PHOTO_STREAM_BUILD_COMMAND", File.join(APP_ROOT, "bin", "photo-stream-build"))
+BUILD_LOG = ENV.fetch("PHOTO_STREAM_BUILD_LOG", File.join(APP_ROOT, ".photo-stream", "build.log"))
+ADMIN_USERNAME = ENV.fetch("PHOTO_STREAM_ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD = ENV["PHOTO_STREAM_ADMIN_PASSWORD"].to_s
+SESSION_SECRET = ENV.fetch("PHOTO_STREAM_ADMIN_SESSION_SECRET") { SecureRandom.hex(32) }
+IMAGE_EXTENSIONS = %w[.gif .jpeg .jpg .png .webp].freeze
+
+Photo = Struct.new(:name, :path, :metadata, keyword_init: true)
+
+class AdminApp
+  include ERB::Util
+
+  def call(req, res)
+    @req = req
+    @res = res
+    @session = session
+
+    case [req.request_method, req.path]
+    when ["GET", "/login"] then login_page
+    when ["POST", "/login"] then login
+    when ["POST", "/logout"] then require_auth { logout }
+    when ["GET", "/"] then require_auth { dashboard }
+    when ["GET", "/photos"] then require_auth { photos_page }
+    when ["GET", "/photos/edit"] then require_auth { edit_photo }
+    when ["POST", "/photos/update"] then require_auth { update_photo }
+    when ["POST", "/rebuild"] then require_auth { rebuild }
+    when ["GET", "/status"] then require_auth { json(status) }
+    else not_found
+    end
+  rescue StandardError => e
+    @res.status = 500
+    html("Error", "<h1>Error</h1><pre>#{h(e.class)}: #{h(e.message)}</pre>")
+  end
+
+  private
+
+  def require_auth
+    return yield if authenticated?
+
+    redirect("/login")
+  end
+
+  def login_page(error = nil)
+    body = +"<h1>Photo Stream Admin</h1>"
+    body << %(<p class="error">#{h(error)}</p>) if error
+    body << if ADMIN_PASSWORD.empty?
+      "<p class=\"error\">Admin is not configured. Set PHOTO_STREAM_ADMIN_PASSWORD to enable login.</p>"
+    else
+      render_login_form
+    end
+    html("Login", body, bare: true)
+  end
+
+  def login
+    return login_page("Admin password is not configured.") if ADMIN_PASSWORD.empty?
+    return login_page("Invalid login.") unless secure_equal?(@req.query["username"].to_s, ADMIN_USERNAME) &&
+                                        secure_equal?(@req.query["password"].to_s, ADMIN_PASSWORD)
+
+    @session[:authenticated] = true
+    @session[:csrf] = SecureRandom.hex(24)
+    save_session
+    redirect("/")
+  end
+
+  def logout
+    @session.clear
+    save_session
+    redirect("/login")
+  end
+
+  def dashboard
+    photo_count = photos.count
+    hidden_count = photos.count { |photo| truthy?(photo.metadata["hidden"]) }
+    body = <<~HTML
+      <h1>Dashboard</h1>
+      <div class="stats">
+        <section><strong>#{photo_count}</strong><span>photos</span></section>
+        <section><strong>#{hidden_count}</strong><span>hidden</span></section>
+        <section><strong>#{h(status["state"] || "unknown")}</strong><span>last build</span></section>
+      </div>
+      <section>
+        <h2>Build Status</h2>
+        <p>#{h(status["message"] || "No build status has been written yet.")}</p>
+        <p class="muted">Updated: #{h(status["updated_at"] || "never")}</p>
+        <form method="post" action="/rebuild">
+          #{csrf_input}
+          <button type="submit">Rebuild Site</button>
+        </form>
+      </section>
+      <section>
+        <h2>Manage</h2>
+        <p><a class="button" href="/photos">Edit photo metadata</a></p>
+      </section>
+    HTML
+    html("Dashboard", body)
+  end
+
+  def photos_page
+    rows = photos.map do |photo|
+      title = present(photo.metadata["title"]) || File.basename(photo.name, ".*")
+      tags = Array(photo.metadata["tags"]).join(", ")
+      hidden = truthy?(photo.metadata["hidden"]) ? "Hidden" : "Visible"
+      <<~HTML
+        <tr>
+          <td><a href="/photos/edit?file=#{u(photo.name)}">#{h(title)}</a><br><span class="muted">#{h(photo.name)}</span></td>
+          <td>#{h(photo.metadata["location"].to_s)}</td>
+          <td>#{h(tags)}</td>
+          <td>#{hidden}</td>
+        </tr>
+      HTML
+    end.join
+
+    html("Photos", <<~HTML)
+      <h1>Photos</h1>
+      <table>
+        <thead><tr><th>Photo</th><th>Location</th><th>Tags</th><th>Status</th></tr></thead>
+        <tbody>#{rows}</tbody>
+      </table>
+    HTML
+  end
+
+  def edit_photo
+    photo = find_photo(@req.query["file"].to_s)
+    return not_found unless photo
+
+    metadata = photo.metadata
+    html("Edit #{photo.name}", <<~HTML)
+      <h1>Edit Photo</h1>
+      <p class="muted">#{h(photo.name)}</p>
+      <form method="post" action="/photos/update" class="editor">
+        #{csrf_input}
+        <input type="hidden" name="file" value="#{h(photo.name)}">
+        <label>Title<input name="title" value="#{h(metadata["title"].to_s)}"></label>
+        <label>Caption<textarea name="caption" rows="5">#{h(metadata["caption"].to_s)}</textarea></label>
+        <label>Location<input name="location" value="#{h(metadata["location"].to_s)}"></label>
+        <label>Tags<input name="tags" value="#{h(Array(metadata["tags"]).join(", "))}"><span class="hint">Comma separated</span></label>
+        <label class="check"><input type="checkbox" name="featured" value="1" #{checked(metadata["featured"])}> Featured</label>
+        <label class="check"><input type="checkbox" name="hidden" value="1" #{checked(metadata["hidden"])}> Hide from public site</label>
+        <div class="actions">
+          <button type="submit">Save Metadata</button>
+          <button type="submit" name="rebuild" value="1">Save And Rebuild</button>
+          <a class="button secondary" href="/photos">Cancel</a>
+        </div>
+      </form>
+    HTML
+  end
+
+  def update_photo
+    verify_csrf!
+    photo = find_photo(@req.query["file"].to_s)
+    return not_found unless photo
+
+    data = load_metadata
+    data[photo.name] = clean_metadata(
+      "title" => @req.query["title"],
+      "caption" => @req.query["caption"],
+      "location" => @req.query["location"],
+      "tags" => @req.query["tags"].to_s.split(",").map(&:strip).reject(&:empty?),
+      "featured" => @req.query["featured"] == "1",
+      "hidden" => @req.query["hidden"] == "1"
+    )
+    data.delete(photo.name) if data[photo.name].empty?
+    save_metadata(data)
+    spawn_build if @req.query["rebuild"] == "1"
+    redirect("/photos/edit?file=#{u(photo.name)}")
+  end
+
+  def rebuild
+    verify_csrf!
+    spawn_build
+    redirect("/")
+  end
+
+  def spawn_build
+    FileUtils.mkdir_p(File.dirname(BUILD_LOG))
+    Process.spawn({ "PHOTO_STREAM_BUILD_REASON" => "admin" }, BUILD_COMMAND, out: [BUILD_LOG, "a"], err: [:child, :out])
+  end
+
+  def photos
+    data = load_metadata
+    Dir.glob(File.join(PHOTO_DIR, "*"))
+       .select { |path| File.file?(path) && IMAGE_EXTENSIONS.include?(File.extname(path).downcase) }
+       .sort_by { |path| File.basename(path).downcase }
+       .map { |path| Photo.new(name: File.basename(path), path: path, metadata: data.fetch(File.basename(path), {}) || {}) }
+  end
+
+  def find_photo(name)
+    return nil if name.empty? || name.include?("/") || name.include?("\\")
+
+    photos.find { |photo| photo.name == name }
+  end
+
+  def load_metadata
+    return {} unless File.exist?(METADATA_FILE)
+
+    YAML.safe_load_file(METADATA_FILE, permitted_classes: [Date, Time], aliases: false) || {}
+  rescue Psych::SyntaxError
+    {}
+  end
+
+  def save_metadata(data)
+    FileUtils.mkdir_p(DATA_DIR)
+    File.write(METADATA_FILE, "#{data.sort.to_h.to_yaml}")
+  end
+
+  def clean_metadata(metadata)
+    metadata.transform_values do |value|
+      value.is_a?(String) ? value.strip : value
+    end.reject do |_key, value|
+      value.nil? || value == "" || value == [] || value == false
+    end
+  end
+
+  def status
+    return {} unless File.exist?(STATUS_FILE)
+
+    JSON.parse(File.read(STATUS_FILE))
+  rescue JSON::ParserError
+    {}
+  end
+
+  def render_login_form
+    <<~HTML
+      <form method="post" action="/login" class="login">
+        <label>Username<input name="username" autocomplete="username" value="#{h(ADMIN_USERNAME)}"></label>
+        <label>Password<input name="password" type="password" autocomplete="current-password"></label>
+        <button type="submit">Sign In</button>
+      </form>
+    HTML
+  end
+
+  def html(title, body, bare: false)
+    @res["Content-Type"] = "text/html; charset=utf-8"
+    nav = bare ? "" : %(<nav><a href="/">Dashboard</a><a href="/photos">Photos</a><form method="post" action="/logout">#{csrf_input}<button>Logout</button></form></nav>)
+    @res.body = <<~HTML
+      <!doctype html>
+      <html lang="en">
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>#{h(title)} - Photo Stream Admin</title>
+        <style>
+          :root { color-scheme: light dark; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+          body { margin: 0; background: #f7f7f4; color: #1f2933; }
+          main { max-width: 1050px; margin: 0 auto; padding: 28px; }
+          nav { align-items: center; background: #1f2933; display: flex; gap: 18px; padding: 12px 28px; }
+          nav a, nav button { color: white; }
+          nav form { margin-left: auto; }
+          h1 { margin-top: 0; }
+          section, table, form.login, form.editor { background: white; border: 1px solid #ddd; border-radius: 8px; margin: 18px 0; padding: 18px; }
+          .stats { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+          .stats section { margin: 0; }
+          .stats strong { display: block; font-size: 2rem; }
+          .stats span, .muted, .hint { color: #667085; }
+          table { border-collapse: collapse; padding: 0; width: 100%; }
+          th, td { border-bottom: 1px solid #e5e7eb; padding: 12px; text-align: left; vertical-align: top; }
+          label { display: block; font-weight: 650; margin-bottom: 14px; }
+          input, textarea { box-sizing: border-box; display: block; font: inherit; margin-top: 6px; padding: 10px; width: 100%; }
+          label.check { align-items: center; display: flex; gap: 8px; }
+          label.check input { margin: 0; width: auto; }
+          button, .button { background: #1f2933; border: 0; border-radius: 6px; color: white; cursor: pointer; display: inline-block; font: inherit; padding: 10px 14px; text-decoration: none; }
+          .secondary { background: #667085; }
+          .actions { display: flex; gap: 10px; }
+          .error { color: #b42318; }
+          @media (prefers-color-scheme: dark) {
+            body { background: #111827; color: #f9fafb; }
+            section, table, form.login, form.editor { background: #1f2933; border-color: #344054; }
+            th, td { border-color: #344054; }
+          }
+        </style>
+      </head>
+      <body>
+        #{nav}
+        <main>#{body}</main>
+      </body>
+      </html>
+    HTML
+  end
+
+  def json(payload)
+    @res["Content-Type"] = "application/json"
+    @res.body = JSON.pretty_generate(payload)
+  end
+
+  def not_found
+    @res.status = 404
+    html("Not Found", "<h1>Not Found</h1>")
+  end
+
+  def redirect(path)
+    @res.status = 303
+    @res["Location"] = path
+    @res.body = ""
+  end
+
+  def session
+    raw = @req.cookies.find { |cookie| cookie.name == "photo_stream_admin" }&.value
+    return {} unless raw
+
+    payload, signature = raw.split("--", 2)
+    return {} unless signature && secure_equal?(signature, sign(payload))
+
+    JSON.parse(Base64.urlsafe_decode64(payload), symbolize_names: true)
+  rescue JSON::ParserError, ArgumentError
+    {}
+  end
+
+  def save_session
+    payload = Base64.urlsafe_encode64(JSON.generate(@session))
+    cookie = WEBrick::Cookie.new("photo_stream_admin", "#{payload}--#{sign(payload)}")
+    cookie.path = "/"
+    @res.cookies << cookie
+  end
+
+  def authenticated?
+    @session[:authenticated] == true
+  end
+
+  def csrf_input
+    return "" unless authenticated?
+
+    %(<input type="hidden" name="csrf" value="#{h(@session[:csrf])}">)
+  end
+
+  def verify_csrf!
+    raise "Invalid CSRF token" unless @req.query["csrf"].to_s == @session[:csrf].to_s
+  end
+
+  def sign(payload)
+    OpenSSL::HMAC.hexdigest("SHA256", SESSION_SECRET, payload)
+  end
+
+  def secure_equal?(left, right)
+    left = left.to_s
+    right = right.to_s
+    return false unless left.bytesize == right.bytesize
+
+    l = left.unpack "C#{left.bytesize}"
+    result = 0
+    right.each_byte { |byte| result |= byte ^ l.shift }
+    result.zero?
+  end
+
+  def truthy?(value)
+    value == true || value.to_s == "true" || value.to_s == "1"
+  end
+
+  def checked(value)
+    truthy?(value) ? "checked" : ""
+  end
+
+  def present(value)
+    text = value.to_s.strip
+    text.empty? ? nil : text
+  end
+
+  def h(value)
+    html_escape(value.to_s)
+  end
+
+  def u(value)
+    CGI.escape(value.to_s)
+  end
+end
+
+server = WEBrick::HTTPServer.new(
+  BindAddress: ENV.fetch("PHOTO_STREAM_ADMIN_HOST", "0.0.0.0"),
+  Port: ENV.fetch("PHOTO_STREAM_ADMIN_PORT", "4001").to_i,
+  AccessLog: [[WEBrick::Log.new($stdout), WEBrick::AccessLog::COMBINED_LOG_FORMAT]],
+  Logger: WEBrick::Log.new($stderr, WEBrick::Log::INFO)
+)
+
+app = AdminApp.new
+server.mount_proc("/") { |req, res| app.call(req, res) }
+
+trap("INT") { server.shutdown }
+trap("TERM") { server.shutdown }
+
+server.start

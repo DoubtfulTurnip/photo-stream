@@ -1,0 +1,55 @@
+#!/bin/sh
+set -eu
+
+APP_ROOT="${PHOTO_STREAM_ROOT:-/photo-stream}"
+SITE_DIR="${PHOTO_STREAM_SITE_DIR:-$APP_ROOT/_site}"
+STATUS_DIR="${PHOTO_STREAM_STATUS_DIR:-$APP_ROOT/.photo-stream}"
+STATUS_FILE="${PHOTO_STREAM_STATUS_FILE:-$STATUS_DIR/status.json}"
+LOCK_DIR="${PHOTO_STREAM_BUILD_LOCK_DIR:-/tmp/photo-stream-build.lock}"
+REASON="${PHOTO_STREAM_BUILD_REASON:-startup}"
+INCREMENTAL="${PHOTO_STREAM_INCREMENTAL:-0}"
+
+write_status() {
+  state="$1"
+  message="$2"
+  exit_code="${3:-}"
+  ruby -rjson -rfileutils -rtime -e '
+    path, state, message, reason, exit_code = ARGV
+    FileUtils.mkdir_p(File.dirname(path))
+    status = {
+      state: state,
+      message: message,
+      reason: reason,
+      updated_at: Time.now.utc.iso8601
+    }
+    status[:exit_code] = exit_code.to_i unless exit_code.nil? || exit_code.empty?
+    File.write(path, JSON.pretty_generate(status))
+  ' "$STATUS_FILE" "$state" "$message" "$REASON" "$exit_code"
+}
+
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+  write_status "running" "Build already running." ""
+  exit 0
+fi
+
+cleanup() {
+  rmdir "$LOCK_DIR" 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
+cd "$APP_ROOT"
+write_status "running" "Jekyll build started." ""
+
+if [ "$INCREMENTAL" = "1" ]; then
+  set -- --trace --incremental
+else
+  set -- --trace
+fi
+
+if bundle exec jekyll build "$@"; then
+  write_status "success" "Jekyll build completed." "0"
+else
+  code="$?"
+  write_status "failed" "Jekyll build failed." "$code"
+  exit "$code"
+fi

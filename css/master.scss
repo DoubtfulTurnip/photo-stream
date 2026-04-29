@@ -271,6 +271,10 @@ main {
 				}
 			}
 		}
+
+		.photo-info {
+			display: none;
+		}
 		
 		// PHOTO DETAIL
 
@@ -335,6 +339,23 @@ main {
 
 			.meta {
 				display: none !important;
+			}
+
+			.photo-info {
+				position: absolute;
+				left: 24px;
+				right: 24px;
+				bottom: 24px;
+				display: block;
+				max-width: 720px;
+				color: #fff;
+				text-shadow: #000 0 1px 1px, #000 0 2px 4px;
+
+				strong,
+				span {
+					display: block;
+					margin-top: 4px;
+				}
 			}
 
 			.photoview-button {

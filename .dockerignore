@@ -5,6 +5,7 @@
 !.env.example
 .jekyll-cache
 .jekyll-metadata
+.photo-stream
 .sass-cache
 _site
 photos

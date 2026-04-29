@@ -23,12 +23,12 @@ RUN apk add --no-cache exiftool vips perl &&\
 
 COPY --from=builder /usr/local/bundle /usr/local/bundle
 COPY --from=builder --chown=photo-stream:photo-stream /photo-stream /photo-stream
-RUN chmod +x /photo-stream/bin/photo-stream-entrypoint
+RUN chmod +x /photo-stream/bin/photo-stream-*
 
 WORKDIR /photo-stream
 
 USER photo-stream
 
-EXPOSE 4000
+EXPOSE 4000 4001
 
 ENTRYPOINT ["/photo-stream/bin/photo-stream-entrypoint"]

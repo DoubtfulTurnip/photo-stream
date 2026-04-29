@@ -1,18 +1,33 @@
-ARG  BASE_IMAGE=ruby:3.1.3-alpine3.17
-FROM ${BASE_IMAGE}
+ARG  BASE_IMAGE=ruby:3.4-alpine
+FROM ${BASE_IMAGE} AS builder
 
-RUN apk update && apk upgrade &&\
-    apk add --update --no-cache build-base glib-dev exiftool libexif-dev expat-dev tiff-dev jpeg-dev libpng libgsf-dev vips git rsync lftp openssh perl &&\
+RUN apk add --no-cache build-base glib-dev exiftool libexif-dev expat-dev tiff-dev jpeg-dev libpng libgsf-dev vips git perl &&\
     rm -rf /var/cache/apk/*
-
-COPY ./ /photo-stream
 
 WORKDIR /photo-stream
 
-RUN ruby -v && gem install bundler jekyll &&\
-    bundle config --local build.sassc --disable-march-tune-native &&\
+COPY Gemfile Gemfile.lock ./
+
+RUN ruby -v && gem install bundler -v 2.6.2 &&\
+    bundle config set --local build.sassc --disable-march-tune-native &&\
     bundle install
+
+COPY ./ /photo-stream
+
+FROM ${BASE_IMAGE}
+
+RUN apk add --no-cache exiftool vips perl &&\
+    addgroup -S photo-stream &&\
+    adduser -S -G photo-stream photo-stream &&\
+    rm -rf /var/cache/apk/*
+
+COPY --from=builder /usr/local/bundle /usr/local/bundle
+COPY --from=builder --chown=photo-stream:photo-stream /photo-stream /photo-stream
+
+WORKDIR /photo-stream
+
+USER photo-stream
 
 EXPOSE 4000
 
-ENTRYPOINT bundle exec jekyll serve --host 0.0.0.0
+ENTRYPOINT ["bundle", "exec", "jekyll", "serve", "--host", "0.0.0.0"]

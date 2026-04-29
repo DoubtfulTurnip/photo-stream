@@ -1,14 +1,16 @@
-version: "3.7"
 services:
   photo-stream:
     container_name: photo-stream
-    image: waschinski/photo-stream:latest
-    #To build from source, comment previous line and uncomment next line
-    # build:
-    #   context: .
-    #   args:
-    ##     - DEBUG=true
-    ##     - BASE_IMAGE=arm32v6/ruby:3.1.2-alpine3.16 # arm base image for RPI
+    image: photo-stream:latest
+    build:
+      context: .
+      args:
+        BASE_IMAGE: ruby:3.4-alpine
+        # BASE_IMAGE: arm32v6/ruby:3.4-alpine # arm base image for RPI
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     environment:
       - TITLE=${TITLE}
       - EMAIL=${EMAIL}
@@ -20,9 +22,18 @@ services:
       - URL=${URL}
       - SHOW_RSS_FEED=${SHOW_RSS_FEED}
       - SHOW_OFFICIAL_GITHUB=${SHOW_OFFICIAL_GITHUB}
+      - HEADER_ENABLED=${HEADER_ENABLED}
+      - HEADER_BACKGROUND_COLOR=${HEADER_BACKGROUND_COLOR}
       - TWITTER_USERNAME=${TWITTER_USERNAME}
+      - GITHUB_USERNAME=${GITHUB_USERNAME}
       - INSTAGRAM_USERNAME=${INSTAGRAM_USERNAME}
+      - CUSTOM_LINK_NAME=${CUSTOM_LINK_NAME}
+      - CUSTOM_LINK_URL=${CUSTOM_LINK_URL}
+      - DEFAULT_REVERSE_SORT=${DEFAULT_REVERSE_SORT}
+      - ALLOW_ORDER_SORT_CHANGE=${ALLOW_ORDER_SORT_CHANGE}
       - ALLOW_ORIGINAL_DOWNLOAD=${ALLOW_ORIGINAL_DOWNLOAD}
+      - ALLOW_INDEXING=${ALLOW_INDEXING}
+      - ALLOW_IMAGE_SHARING=${ALLOW_IMAGE_SHARING}
     volumes:
       - ${PHOTO_PATH}:/photo-stream/photos
     env_file: .env

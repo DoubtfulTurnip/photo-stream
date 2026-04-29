@@ -1,5 +1,12 @@
 source "https://rubygems.org"
-ruby "~> 3.1.2"
+ruby ">= 3.1", "< 3.5"
+
+gem "csv"
+gem "logger"
+gem "base64"
+gem "bigdecimal"
+gem "ostruct"
+gem "rexml", ">= 3.4.2"
 # Hello! This is where you manage which Jekyll version is used to run.
 # When you want to use a different version, change it below, save the
 # file and run `bundle install`. Run Jekyll with `bundle exec`, like so:

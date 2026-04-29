@@ -53,29 +53,36 @@ Previously the recommended way to install Photo Stream was to fork the repositor
 
 ### Using Docker
 
-There is an image over at [Docker Hub](https://hub.docker.com/r/waschinski/photo-stream) which you can pull using:
+There is an upstream image over at [Docker Hub](https://hub.docker.com/r/waschinski/photo-stream), but this fork's compose file builds the local Dockerfile by default so you get the current dependency and image hardening changes.
 
 ```sh
 docker pull waschinski/photo-stream:latest
 ```
 
-Alternatively download the `docker-compose.yml` file, change the configuration as needed and use the following command to get Photo Stream running:
+Copy the example environment file, change the configuration as needed, and use the following command to get Photo Stream running:
 
 ```sh
-docker-compose up -d
+cp .env.example .env
+docker compose up -d
+```
+
+After pushes to `master`, this fork publishes a container image to GitHub Container Registry:
+
+```sh
+docker pull ghcr.io/doubtfulturnip/photo-stream:latest
 ```
 
 The `photos` folder can be mounted as a volume. Make sure to put your photos in a folder called `original`.
 
 #### Using Docker on Raspberry Pi (`linux/arm/v6` only):
 
-Prerequisites : docker and docker-compose are installed on RPI
+Prerequisites: Docker and Docker Compose are installed on RPI
 
-In docker-compose.yml comment `image` section, uncomment `build` section, and setup `BASE_IMAGE` arg to `arm32v6/ruby:3.1.2-alpine3.16`.
+In docker-compose.yml adjust the `BASE_IMAGE` build arg to an ARM-compatible Ruby Alpine image.
 
-Then `docker-compose build`
+Then `docker compose build`
 
-Then `docker-compose up -d`
+Then `docker compose up -d`
 
 ### Manually
 
@@ -138,7 +145,7 @@ sh ./_script/build-n-lftp.sh
 
 ### Basics
 
-First thing you want to do is edit a couple of things in `/.env`:
+First copy `.env.example` to `.env`, then edit a couple of things in `/.env`:
 
 - `TITLE`: The title of your photo stream.
 - `EMAIL`: Your email address (this line is optional, you can remove it).

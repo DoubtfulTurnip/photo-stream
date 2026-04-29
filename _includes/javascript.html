@@ -14,7 +14,7 @@
   document.addEventListener('touchstart', handleTouchStart, false);        
   document.addEventListener('touchmove', handleTouchMove, false);
 
-  var xDown = null;
+  let xDown = null;
 
   function getTouches(evt) {
       return evt.touches ||             // browser API
@@ -31,9 +31,9 @@
           return;
       }
 
-      var xUp = evt.touches[0].clientX;
+      const xUp = evt.touches[0].clientX;
 
-      var xDiff = xDown - xUp;
+      const xDiff = xDown - xUp;
                                                                           
       if ( xDiff > 0 ) {
           clickNavigationButton('.next');
@@ -42,7 +42,6 @@
       }
       /* reset values */
       xDown = null;
-      yDown = null;                                             
   };
 
   /* image sharing */
@@ -122,9 +121,10 @@
 
   const reverseSorting = () => {
     {% if site.env.ALLOW_ORDER_SORT_CHANGE == "1" %}
-    var parent = document.getElementById('target');
-    for (var i = 1; i < parent.childNodes.length; i++){
-        parent.insertBefore(parent.childNodes[i], parent.firstChild);
+    const parent = document.getElementById('target');
+    const items = Array.from(parent.children);
+    for (const item of items) {
+      parent.insertBefore(item, parent.firstChild);
     }
     {% endif %}
   }

@@ -1,9 +1,9 @@
 ---
 ---
 {% if site.env.DEFAULT_REVERSE_SORT == "1" %}
-  {% assign images = site.static_files | photo_filter | reverse %}
+  {% assign images = site.static_files | photo_filter | visible_photos | reverse %}
 {% else %}
-  {% assign images = site.static_files | photo_filter %}
+  {% assign images = site.static_files | photo_filter | visible_photos %}
 {% endif %}
 (function(html) {
   const id = document.currentScript.getAttribute('data-photo-id');

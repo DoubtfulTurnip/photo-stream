@@ -1,32 +1,18 @@
 module Jekyll
-  IMAGE_EXTENSIONS = %w[.gif .jpeg .jpg .png .webp].freeze
-
   class PhotoPages < Generator
     safe true
 
     def generate(site)
-      site.static_files.each do |file|
-        if photo_file?(file) && !PhotoMetadata::Lookup.hidden?(site, file)
-          site.pages << PhotoPage.new(site, site.source, file)
-        end
+      PhotoIndex.visible_photos(site).each do |photo|
+        site.pages << PhotoPage.new(site, site.source, photo)
       end
-    end
-
-    private
-
-    def photo_file?(file)
-      relative_path = file.relative_path.tr("\\", "/").delete_prefix("./").delete_prefix("/")
-
-      relative_path.start_with?("photos/original/") &&
-        IMAGE_EXTENSIONS.include?(File.extname(relative_path).downcase)
     end
   end
 
   class PhotoPage < Page
-    def initialize(site, base, file)
-      basename = File.basename(file.path)
-      name = File.basename(file.path, ".*")
-      slug = Jekyll::Utils.slugify(name)
+    def initialize(site, base, photo)
+      name = File.basename(photo["name"], ".*")
+      slug = photo["slug"]
 
       @site = site
       @base = base
@@ -37,7 +23,7 @@ module Jekyll
       self.read_yaml(File.join(base), "index.html")
 
       self.data["title"] = name
-      self.data["images"] = [file]
+      self.data["images"] = [photo]
       self.data["image_slug"] = slug
     end
   end

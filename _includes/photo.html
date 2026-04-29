@@ -4,10 +4,10 @@
 {% assign caption = image | photo_caption %}
 {% assign location = image | photo_location %}
 {% assign tags = image | photo_tags %}
+{% assign height = image.height %}
+{% assign width = image.width %}
 {% assign next_index = forloop.index0 | plus: 1 %}
 {% assign previous_index = forloop.index0 | minus: 1 %}
-
-{% capture image_path %}photos/original/{{ image.name }}{% endcapture %}
 
 {% if slug == page.image_slug %}
     {% assign target = "target" %}
@@ -17,7 +17,7 @@
 
 <li class="item {{ target }}" id="id-{{ slug }}" style="background-image: url('{{ safe_name | processed_path: 'tint' }}')" title="{{ title | escape }}">
 
-    <img class="lazyload" data-src="{{ safe_name | processed_path: 'thumbnail' }}" src="{{ safe_name | processed_path: 'tint' }}" height="{{ image_path | exif: 'height'}}" width="{{ image_path | exif: 'width'}}" />
+    <img class="lazyload" data-src="{{ safe_name | processed_path: 'thumbnail' }}" src="{{ safe_name | processed_path: 'tint' }}" height="{{ height }}" width="{{ width }}" />
     <span class="full">
         <span style="background-image: url('{{ safe_name | processed_path: 'large' }}')"></span>
     </span>
@@ -62,11 +62,6 @@
         {% if tags.size > 0 %}
             <li class="photo-tags">{{ tags | join: ", " }}</li>
         {% endif %}
-        <!--
-        <li>{{ image_path | exif: 'model'}}</li>
-        <li>{{ image_path | exif: 'exposure_time'}}</li>
-        <li><span class="aperture"><em>f</em>/</span>{{ image_path | exif: 'aperture_value'}}</li>
-        -->
         {% if site.env.ALLOW_IMAGE_SHARING == "1" %}
             <li><a href="{{ slug | relative_url }}" data-share-title="{{ title | escape }}" data-share-url="{{ slug | relative_url }}" class="gridview-button share" title="Share this image">Share</a></li>
         {% endif %}

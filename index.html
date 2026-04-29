@@ -12,10 +12,14 @@
 	{% endif %}
 	<main>
 		<ul class="grid" id="{{ target }}">
-		{% if site.env.DEFAULT_REVERSE_SORT == "1" %}
-			{% assign images = site.static_files | photo_filter | visible_photos | reverse %}
+		{% if page.images %}
+			{% assign images = page.images %}
 		{% else %}
-			{% assign images = site.static_files | photo_filter | visible_photos %}
+			{% if site.env.DEFAULT_REVERSE_SORT == "1" %}
+				{% assign images = site.static_files | photo_filter | visible_photos | reverse %}
+			{% else %}
+				{% assign images = site.static_files | photo_filter | visible_photos %}
+			{% endif %}
 		{% endif %}
 		{% include photos.html %}
 		</ul>

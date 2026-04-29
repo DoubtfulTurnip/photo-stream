@@ -4,13 +4,14 @@ module Jekyll
       module_function
 
       def metadata_for(site, photo)
+        return photo if photo.is_a?(Hash)
+
         photos = site.data.fetch("photos", {}) || {}
         photos.fetch(photo.name, {}) || {}
       end
 
       def hidden?(site, photo)
-        value = metadata_for(site, photo)["hidden"]
-        value == true || value.to_s == "true" || value.to_s == "1"
+        PhotoIndex.truthy?(metadata_for(site, photo)["hidden"])
       end
     end
 
@@ -30,7 +31,8 @@ module Jekyll
         title = metadata["title"].to_s.strip
         return title unless title.empty?
 
-        File.basename(photo.name, ".*")
+        name = metadata["name"] || photo.name
+        File.basename(name, ".*")
       end
 
       def photo_caption(photo)

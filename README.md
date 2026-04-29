@@ -94,6 +94,8 @@ Configuration is handled through `.env`. The most commonly used settings are:
 - `ALLOW_ORIGINAL_DOWNLOAD`
 - `ALLOW_INDEXING`
 - `ALLOW_IMAGE_SHARING`
+- `PHOTO_STREAM_BUILD_ON_START`
+- `PHOTO_STREAM_SERVE_MODE`
 - `TWITTER_USERNAME`
 - `GITHUB_USERNAME`
 - `INSTAGRAM_USERNAME`
@@ -109,6 +111,8 @@ During a build, images from `photos/original` are processed into:
 - `photos/tint`
 
 Generated static output is written to `_site`.
+
+Set `PHOTO_STREAM_SERVE_MODE=static` or `PHOTO_STREAM_BUILD_ON_START=0` to skip Jekyll generation on container restart when `_site/index.html` already exists. Use the default `jekyll` mode again after adding photos so the site and image variants are regenerated.
 
 ## Security Notes
 

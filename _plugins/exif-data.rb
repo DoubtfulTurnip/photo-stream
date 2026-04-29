@@ -18,15 +18,21 @@ module Jekyll
 
         begin
           if File.exist?(filepath)
-            e = Exiftool.new(filepath)
-            e.to_hash.key?(exiftag)
-            e[exiftag]
+            metadata = exif_cache(filepath)
+            metadata[exiftag]
           end
 
         rescue StandardError => e  
           puts e.message 
           nil
         end
+      end
+
+      def exif_cache(filepath)
+        @exif_cache ||= {}
+        cache_key = [filepath, File.mtime(filepath).to_i]
+
+        @exif_cache[cache_key] ||= Exiftool.new(filepath).to_hash
       end
     end
   end

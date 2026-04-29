@@ -16,10 +16,20 @@ module Jekyll
     private
 
     def photo_time(photo)
-      exif = Exiftool.new(photo.path)
-      parse_time(exif[:date_time_original]) || photo.modified_time
+      photo_time_cache[cache_key(photo)] ||= begin
+        exif = Exiftool.new(photo.path)
+        parse_time(exif[:date_time_original]) || photo.modified_time
+      end
     rescue StandardError
       photo.modified_time
+    end
+
+    def photo_time_cache
+      @photo_time_cache ||= {}
+    end
+
+    def cache_key(photo)
+      [photo.path, photo.modified_time.to_i]
     end
 
     def parse_time(value)

@@ -1,0 +1,20 @@
+#!/bin/sh
+set -eu
+
+HOST="${HOST:-0.0.0.0}"
+PORT="${PORT:-4000}"
+BUILD_ON_START="${PHOTO_STREAM_BUILD_ON_START:-1}"
+SERVE_MODE="${PHOTO_STREAM_SERVE_MODE:-jekyll}"
+SITE_DIR="/photo-stream/_site"
+
+if [ "$SERVE_MODE" = "static" ] || [ "$BUILD_ON_START" = "0" ]; then
+  if [ ! -f "$SITE_DIR/index.html" ]; then
+    echo "No existing _site/index.html found; running one build before static serve."
+    bundle exec jekyll build --trace
+  fi
+
+  echo "Serving existing static site from $SITE_DIR on $HOST:$PORT"
+  exec ruby -run -e httpd "$SITE_DIR" -b "$HOST" -p "$PORT"
+fi
+
+exec bundle exec jekyll serve --host "$HOST" --port "$PORT" --trace

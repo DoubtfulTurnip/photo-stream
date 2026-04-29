@@ -25,7 +25,7 @@ module Jekyll
 
         rescue StandardError => e  
           puts e.message 
-          file
+          nil
         end
       end
     end

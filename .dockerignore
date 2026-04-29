@@ -3,6 +3,10 @@
 .env
 .env.*
 !.env.example
+.jekyll-cache
+.jekyll-metadata
+.sass-cache
+_site
 photos
 Dockerfile
 README.md

@@ -30,4 +30,4 @@ USER photo-stream
 
 EXPOSE 4000
 
-ENTRYPOINT ["bundle", "exec", "jekyll", "serve", "--host", "0.0.0.0"]
+ENTRYPOINT ["bundle", "exec", "jekyll", "serve", "--host", "0.0.0.0", "--trace"]

@@ -1,13 +1,24 @@
 module Jekyll
+  IMAGE_EXTENSIONS = %w[.gif .jpeg .jpg .png .webp].freeze
+
   class PhotoPages < Generator
     safe true
 
     def generate(site)
       site.static_files.each do |file|
-        if file.relative_path.include?("original")
+        if photo_file?(file)
           site.pages << PhotoPage.new(site, site.source, file)
         end
       end
+    end
+
+    private
+
+    def photo_file?(file)
+      relative_path = file.relative_path.tr("\\", "/").delete_prefix("./").delete_prefix("/")
+
+      relative_path.start_with?("photos/original/") &&
+        IMAGE_EXTENSIONS.include?(File.extname(relative_path).downcase)
     end
   end
 

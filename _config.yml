@@ -61,4 +61,4 @@ image_processing:
 #   - vendor/cache/
 #   - vendor/gems/
 #   - vendor/ruby/
-exclude: [Dockerfile, LICENSE, docker-compose.yml, README.md, Procfile]
+exclude: [.jekyll-cache, .sass-cache, _site, Dockerfile, LICENSE, docker-compose.yml, README.md, Procfile]

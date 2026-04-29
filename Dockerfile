@@ -17,8 +17,8 @@ COPY ./ /photo-stream
 FROM ${BASE_IMAGE}
 
 RUN apk add --no-cache exiftool vips perl &&\
-    addgroup -S photo-stream &&\
-    adduser -S -G photo-stream photo-stream &&\
+    addgroup -S -g 1000 photo-stream &&\
+    adduser -S -D -u 1000 -G photo-stream -h /home/photo-stream photo-stream &&\
     rm -rf /var/cache/apk/*
 
 COPY --from=builder /usr/local/bundle /usr/local/bundle

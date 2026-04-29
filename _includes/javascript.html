@@ -46,24 +46,79 @@
 
   /* image sharing */
 
-  const shareImage = (title, url) => {
-    if (navigator.canShare) {
-      const shareData = {
-        title: title,
-        text: 'I found a cool photo over at {{ site.env.TITLE | smartify }}! Check it out!',
-        url: url
-      }
-      navigator.share(shareData)
-    } else {
-      navigator.clipboard.writeText(`I found a cool photo over at {{ site.env.TITLE | smartify }}! Check it out!\n\n${window.location.origin}${url}`);
+  const showToast = (text) => {
+    if (window.Toastify) {
       Toastify({
-        text: "Copied to clipboard",
+        text,
         duration: 3000,
         style: {
           background: "rgba(0, 0, 0, 0.7)"
         }
       }).showToast();
     }
+  }
+
+  const copyText = async (text) => {
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(text);
+        showToast("Copied to clipboard");
+        return;
+      } catch (error) {
+        console.warn('Clipboard API failed, falling back to textarea copy.', error);
+      }
+    }
+
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.setAttribute('readonly', '');
+    textArea.style.position = 'fixed';
+    textArea.style.top = '-1000px';
+    textArea.style.left = '-1000px';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+
+    let copied = false;
+    try {
+      copied = document.execCommand('copy');
+    } catch (error) {
+      console.warn('Textarea copy failed, falling back to manual prompt.', error);
+    } finally {
+      document.body.removeChild(textArea);
+    }
+
+    if (copied) {
+      showToast("Copied to clipboard");
+      return;
+    }
+
+    window.prompt('Copy this link:', text);
+  }
+
+  const shareImage = async (title, url) => {
+    const absoluteUrl = new URL(url, window.location.origin).href;
+    const siteTitle = {{ site.env.TITLE | smartify | jsonify }};
+    const text = `I found a cool photo over at ${siteTitle}! Check it out!`;
+    const shareData = {
+      title,
+      text,
+      url: absoluteUrl
+    };
+
+    if (navigator.share && (!navigator.canShare || navigator.canShare(shareData))) {
+      try {
+        await navigator.share(shareData);
+        return;
+      } catch (error) {
+        if (error.name === 'AbortError') {
+          return;
+        }
+        console.warn('Web Share failed, falling back to copy.', error);
+      }
+    }
+
+    await copyText(`${text}\n\n${absoluteUrl}`);
   }
 
   const clickNavigationButton = (buttonClass) => {
@@ -174,6 +229,14 @@
 
     handleClick('ul.links li.sort a', event, () => {
       reverseSorting();
+    });
+
+    handleClick('a[data-share-url]', event, () => {
+      const target = event.target;
+      shareImage(
+        target.getAttribute('data-share-title'),
+        target.getAttribute('data-share-url')
+      );
     });
   });
 
